@@ -1,3 +1,5 @@
+// +build !travis
+
 package ldap
 
 import (
@@ -651,23 +653,6 @@ func testAccStepLoginNoGroupDN(t *testing.T, user string, pass string) logicalte
 
 			return logicaltest.TestCheckAuth([]string{"bar", "default"})(resp)
 		},
-	}
-}
-
-func TestLDAPEscape(t *testing.T) {
-	testcases := map[string]string{
-		"#test":       "\\#test",
-		"test,hello":  "test\\,hello",
-		"test,hel+lo": "test\\,hel\\+lo",
-		"test\\hello": "test\\\\hello",
-		"  test  ":    "\\  test \\ ",
-	}
-
-	for test, answer := range testcases {
-		res := EscapeLDAPValue(test)
-		if res != answer {
-			t.Errorf("Failed to escape %s: %s != %s\n", test, res, answer)
-		}
 	}
 }
 

@@ -1487,7 +1487,7 @@ func generateCATestingSteps(t *testing.T, caCert, caKey, otherCaCert string, int
 // Generates steps to test out various role permutations
 func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	roleVals := roleEntry{
-		MaxTTL:    "12h",
+		MaxTTL:    12 * time.Hour,
 		KeyType:   "rsa",
 		KeyBits:   2048,
 		RequireCN: true,
@@ -1866,7 +1866,7 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 
 			issueTestStep.ErrorOk = !allowed
 
-			validity, _ := time.ParseDuration(roleVals.MaxTTL)
+			validity := roleVals.MaxTTL
 
 			var testBitSize int
 
@@ -2088,16 +2088,16 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	{
 		roleTestStep.ErrorOk = true
 		roleVals.Lease = ""
-		roleVals.MaxTTL = ""
+		roleVals.MaxTTL = 0
 		addTests(nil)
 
 		roleVals.Lease = "12h"
-		roleVals.MaxTTL = "6h"
+		roleVals.MaxTTL = 6 * time.Hour
 		addTests(nil)
 
 		roleTestStep.ErrorOk = false
-		roleVals.TTL = ""
-		roleVals.MaxTTL = "12h"
+		roleVals.TTL = 0
+		roleVals.MaxTTL = 12 * time.Hour
 	}
 
 	// Listing test
@@ -2494,8 +2494,11 @@ func TestBackend_Root_Idempotency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp != nil {
-		t.Fatal("expected no ca info")
+	if resp == nil {
+		t.Fatal("expected a warning")
+	}
+	if resp.Data != nil || len(resp.Warnings) == 0 {
+		t.Fatalf("bad response: %#v", *resp)
 	}
 	resp, err = client.Logical().Read("pki/cert/ca_chain")
 	if err != nil {
@@ -2577,24 +2580,6 @@ func TestBackend_Permitted_DNS_Domains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = client.Logical().Write("root/roles/example", map[string]interface{}{
-		"allowed_domains":    "foobar.com,zipzap.com,abc.com,xyz.com",
-		"allow_bare_domains": true,
-		"allow_subdomains":   true,
-		"max_ttl":            "2h",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = client.Logical().Write("int/roles/example", map[string]interface{}{
-		"allowed_domains":    "foobar.com,zipzap.com,abc.com,xyz.com",
-		"allow_subdomains":   true,
-		"allow_bare_domains": true,
-		"max_ttl":            "2h",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Direct issuing from root
 	_, err = client.Logical().Write("root/root/generate/internal", map[string]interface{}{
@@ -2621,6 +2606,33 @@ func TestBackend_Permitted_DNS_Domains(t *testing.T) {
 			} else {
 				argMap[currString] = arg
 			}
+		}
+		// We do this to ensure writing a key type of any is invalid when
+		// issuing and valid when signing
+		_, err = client.Logical().Write(path+"roles/example", map[string]interface{}{
+			"allowed_domains":    "foobar.com,zipzap.com,abc.com,xyz.com",
+			"allow_subdomains":   true,
+			"allow_bare_domains": true,
+			"max_ttl":            "2h",
+			"key_type":           "any",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = client.Logical().Write(path+"issue/example", argMap)
+		if err == nil {
+			t.Fatal("expected err from key_type any")
+		}
+		// Now put it back
+		_, err = client.Logical().Write(path+"roles/example", map[string]interface{}{
+			"allowed_domains":    "foobar.com,zipzap.com,abc.com,xyz.com",
+			"allow_subdomains":   true,
+			"allow_bare_domains": true,
+			"max_ttl":            "2h",
+			"key_type":           "rsa",
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
 		_, err = client.Logical().Write(path+"issue/example", argMap)
 		switch {
@@ -3207,6 +3219,129 @@ func TestBackend_OID_SANs(t *testing.T) {
 		t.Fatalf("unexpected DNS SANs %v", cert.DNSNames)
 	}
 	t.Logf("certificate 3 to check:\n%s", certStr)
+}
+
+func TestBackend_AllowedSerialNumbers(t *testing.T) {
+	coreConfig := &vault.CoreConfig{
+		LogicalBackends: map[string]logical.Factory{
+			"pki": Factory,
+		},
+	}
+	cluster := vault.NewTestCluster(t, coreConfig, &vault.TestClusterOptions{
+		HandlerFunc: vaulthttp.Handler,
+	})
+	cluster.Start()
+	defer cluster.Cleanup()
+
+	client := cluster.Cores[0].Client
+	var err error
+	err = client.Sys().Mount("root", &api.MountInput{
+		Type: "pki",
+		Config: api.MountConfigInput{
+			DefaultLeaseTTL: "16h",
+			MaxLeaseTTL:     "60h",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var resp *api.Secret
+	var certStr string
+	var block *pem.Block
+	var cert *x509.Certificate
+
+	_, err = client.Logical().Write("root/root/generate/internal", map[string]interface{}{
+		"ttl":         "40h",
+		"common_name": "myvault.com",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// First test that Serial Numbers are not allowed
+	_, err = client.Logical().Write("root/roles/test", map[string]interface{}{
+		"allow_any_name":    true,
+		"enforce_hostnames": false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err = client.Logical().Write("root/issue/test", map[string]interface{}{
+		"common_name": "foobar",
+		"ttl":         "1h",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err = client.Logical().Write("root/issue/test", map[string]interface{}{
+		"common_name":   "foobar",
+		"ttl":           "1h",
+		"serial_number": "foobar",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	// Update the role to allow serial numbers
+	_, err = client.Logical().Write("root/roles/test", map[string]interface{}{
+		"allow_any_name":         true,
+		"enforce_hostnames":      false,
+		"allowed_serial_numbers": "f00*,b4r*",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err = client.Logical().Write("root/issue/test", map[string]interface{}{
+		"common_name": "foobar",
+		"ttl":         "1h",
+		// Not a valid serial number
+		"serial_number": "foobar",
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	// Valid for first possibility
+	resp, err = client.Logical().Write("root/issue/test", map[string]interface{}{
+		"common_name":   "foobar",
+		"serial_number": "f00bar",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	certStr = resp.Data["certificate"].(string)
+	block, _ = pem.Decode([]byte(certStr))
+	cert, err = x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cert.Subject.SerialNumber != "f00bar" {
+		t.Fatalf("unexpected Subject SerialNumber %s", cert.Subject.SerialNumber)
+	}
+	t.Logf("certificate 1 to check:\n%s", certStr)
+
+	// Valid for second possibility
+	resp, err = client.Logical().Write("root/issue/test", map[string]interface{}{
+		"common_name":   "foobar",
+		"serial_number": "b4rf00",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	certStr = resp.Data["certificate"].(string)
+	block, _ = pem.Decode([]byte(certStr))
+	cert, err = x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cert.Subject.SerialNumber != "b4rf00" {
+		t.Fatalf("unexpected Subject SerialNumber %s", cert.Subject.SerialNumber)
+	}
+	t.Logf("certificate 2 to check:\n%s", certStr)
 }
 
 func setCerts() {
