@@ -91,6 +91,14 @@ of the role:
     username           v-root-e2978cd0-
     ```
 
+### Role Deletion
+
+When deleting a database role, valid leases created by the role will no longer
+be able to get invalidated by Vault. To avoid having dangling leases, it is
+recommended that all associated leases for the role to be removed before
+removing the role. This can be done via [prefix-based lease
+revocation](/docs/concepts/lease.html#prefix-based-revocation).
+
 ## Custom Plugins
 
 This secrets engine allows custom database types to be run through the exposed
