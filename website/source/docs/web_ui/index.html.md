@@ -14,7 +14,7 @@ but not required to use this guide.
 
 The following Vault UI topics are covered:
 
-- [Configure](/docs/web_ui/config.html)
+- [Activate Web UI](/docs/web_ui/config.html)
 - [Initialize](/docs/web_ui/init.html)
 - [Unseal](/docs/web_ui/unseal.html)
 - [Sign in](/docs/web_ui/sign-in.html)
