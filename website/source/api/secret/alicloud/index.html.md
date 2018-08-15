@@ -31,6 +31,11 @@ the policies that should be attached to the access key you provide.
 | `POST`   | `/alicloud/config`           | `204 (empty body)`     |
 | `GET`    | `/alicloud/config`           | `200 application/json` |
 
+### Parameters
+
+* `access_key` (string, required) - The ID of an access key with appropriate policies.
+* `secret_key` (string, required) - The secret for that key.
+
 ### Sample Post Request
 
 ```
@@ -64,11 +69,12 @@ The `roles` endpoint configures how Vault will manage the passwords for individu
 
 ### Parameters
 
-* `remote_policies` (TODO string, required) - The name of a pre-existing service account in Active Directory that maps to this role.
-* `inline_policies` (TODO string, optional) - The password time-to-live in seconds. Defaults to the configuration `ttl` if not provided.
-* `role_arn` (TODO string, optional) - The password time-to-live in seconds. Defaults to the configuration `ttl` if not provided.
-* `ttl`
-* `max_ttl`
+* `name` (string, required) – Specifies the name of the role to generate credentials against. This is part of the request URL.
+* `remote_policies` (string, optional) - The names and types of a pre-existing policies to be applied to the generate access token. Example: "name:AliyunOSSReadOnlyAccess,type:System".
+* `inline_policies` (string, optional) - The policy document JSON to be generated and attached to the access token.
+* `role_arn` (string, optional) - The ARN of a role that will be assumed to obtain STS credentials. See [Vault AliCloud documentation](/docs/secrets/alicloud/index.html) regarding trusted actors.
+* `ttl` (int, optional) - The duration in seconds after which the issued token should expire. Defaults to 0, in which case the value will fallback to the system/mount defaults.
+* `max_ttl` (int, optional) - The maximum allowed lifetime of tokens issued using this role.
 
 | Method   | Path                        | Produces               |
 | :------- | :---------------------------| :--------------------- |
@@ -170,8 +176,7 @@ role must be created before queried.
 
 ### Parameters
 
-- `name` `(string: <required>)` – Specifies the name of the role to generate
-  credentials against. This is part of the request URL.
+* `name` (string, required) – Specifies the name of the role to generate credentials against. This is part of the request URL.
 
 ### Sample Request
 
