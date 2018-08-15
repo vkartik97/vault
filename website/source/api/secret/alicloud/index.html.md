@@ -65,7 +65,7 @@ $ curl \
 
 ## Role management
 
-The `roles` endpoint configures how Vault will manage the passwords for individual service accounts.
+The `roles` endpoint configures how Vault will generate credentials for users of each role.
 
 ### Parameters
 
