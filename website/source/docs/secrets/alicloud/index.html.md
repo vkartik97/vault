@@ -47,8 +47,8 @@ AliCloud to generate credentials:
 
     ```text
     $ vault write alicloud/config \
-        access_key=AKIAJWVN5Z4FOFT7NLNA \
-        secret_key=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
+        access_key=0wNEpMMlzy7szvai \
+        secret_key=PupkTg8jdmau1cXxYacgE736PJj4cA
     ```
 
 1. Configure a role describing how credentials will be granted. 
@@ -104,7 +104,6 @@ roles are configured.
 This is an example RAM policy that would allow you to create credentials using
 any type of role:
 
-TODO - add this and test it too
 ```json
 {
   "Statement": [
@@ -155,15 +154,14 @@ the proper permission, it can generate credentials.
 of the role:
 
     ```text
-    TODO check these through, same with below
     $ vault read alicloud/creds/policy-based
     Key                Value
     ---                -----
     lease_id           alicloud/creds/policy-based/f3e92392-7d9c-09c8-c921-575d62fe80d8
     lease_duration     768h
     lease_renewable    true
-    access_key         AKIAIOWQXTLW36DV7IEA
-    secret_key         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
+    access_key         0wNEpMMlzy7szvai
+    secret_key         PupkTg8jdmau1cXxYacgE736PJj4cA
     ```
 
     The `access_key` and `secret_key` returned are also known is an 
@@ -174,17 +172,17 @@ of the role:
     fields of `expiration` and `security_token`, like so:
     
     ```text
-        $ vault read alicloud/creds/role-based
-        Key                Value
-        ---                -----
-        lease_id           alicloud/creds/my-role/f3e92392-7d9c-09c8-c921-575d62fe80d9
-        lease_duration     768h
-        lease_renewable    false
-        access_key         AKIAIOWQXTLW36DV7IEA
-        secret_key         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
-        security_token     CAESrAIIARKAAShQquMnLIlbvEcIxO6wCoqJufs8sWwieUxu45hS9A...
-        expiration         TODO I need an example of this
-        ```
+    $ vault read alicloud/creds/role-based
+    Key                Value
+    ---                -----
+    lease_id           alicloud/creds/role-based/f3e92392-7d9c-09c8-c921-575d62fe80d9
+    lease_duration     59m59s
+    lease_renewable    false
+    access_key         STS.L4aBSCSJVMuKg5U1vFDw
+    secret_key         wyLTSmsyPGP1ohvvw8xYgB29dlGI8KMiH2pKCNZ9
+    security_token     CAESrAIIARKAAShQquMnLIlbvEcIxO6wCoqJufs8sWwieUxu45hS9AvKNEte8KRUWiJWJ6Y+YHAPgNwi7yfRecMFydL2uPOgBI7LDio0RkbYLmJfIxHM2nGBPdml7kYEOXmJp2aDhbvvwVYIyt/8iES/R6N208wQh0Pk2bu+/9dvalp6wOHF4gkFGhhTVFMuTDRhQlNDU0pWTXVLZzVVMXZGRHciBTQzMjc0KgVhbGljZTCpnJjwySk6BlJzYU1ENUJuCgExGmkKBUFsbG93Eh8KDEFjdGlvbkVxdWFscxIGQWN0aW9uGgcKBW9zczoqEj8KDlJlc291cmNlRXF1YWxzEghSZXNvdXJjZRojCiFhY3M6b3NzOio6NDMyNzQ6c2FtcGxlYm94L2FsaWNlLyo=
+    expiration         2018-08-15T21:58:00Z
+    ```
 
 ## API
 
