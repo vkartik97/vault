@@ -277,6 +277,12 @@
 			"revisionTime": "2018-08-22T15:14:34Z"
 		},
 		{
+			"checksumSHA1": "Lbc1eCpbtMykOp4hEFoER5XU8Ds=",
+			"path": "github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials/providers",
+			"revision": "ef9535c490beb6b59620d93f6c7ba88e9b3b1ad0",
+			"revisionTime": "2018-08-22T15:14:34Z"
+		},
+		{
 			"checksumSHA1": "/qgQnVuKg8C8p1Wh2KXdTKMBr5c=",
 			"path": "github.com/aliyun/alibaba-cloud-sdk-go/sdk/endpoints",
 			"revision": "ef9535c490beb6b59620d93f6c7ba88e9b3b1ad0",
@@ -1345,16 +1351,16 @@
 			"revisionTime": "2018-05-30T15:59:58Z"
 		},
 		{
-			"checksumSHA1": "YfqomSqF4w9VSXlE0fIuXHLY1fc=",
+			"checksumSHA1": "76udfjuAEmd4JFZP8LhTLTKZ6gk=",
 			"path": "github.com/hashicorp/vault-plugin-auth-alicloud",
-			"revision": "aec43c9721368e8a28bfac4ad3b450d4c77efce3",
-			"revisionTime": "2018-08-16T20:09:44Z"
+			"revision": "90acf238c385792939aade0286fcb941d9899435",
+			"revisionTime": "2018-08-22T21:26:04Z"
 		},
 		{
-			"checksumSHA1": "KyRLlVNKvvjYWXqDxi478EBUEMY=",
+			"checksumSHA1": "xdrSQoX7B7Hr4iWm9T2+5wHVpHQ=",
 			"path": "github.com/hashicorp/vault-plugin-auth-alicloud/tools",
-			"revision": "aec43c9721368e8a28bfac4ad3b450d4c77efce3",
-			"revisionTime": "2018-08-16T20:09:44Z"
+			"revision": "90acf238c385792939aade0286fcb941d9899435",
+			"revisionTime": "2018-08-22T21:26:04Z"
 		},
 		{
 			"checksumSHA1": "ojr0r/jmutGEhftDXiHthCCwpIA=",
