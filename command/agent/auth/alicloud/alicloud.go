@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	aliCloudAuth "github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth"
@@ -15,6 +14,15 @@ import (
 	"github.com/hashicorp/vault/command/agent/auth"
 )
 
+/*
+
+	Creds can be inferred from instance metadata, and those creds
+	expire every 60 minutes, so we're going to need to poll for new
+	creds. Since we're polling anyways, let's poll once a minute so
+	all changes can be quicked up rather quickly. This is configurable,
+	however.
+
+*/
 const defaultCredCheckFreqSeconds = 60
 
 func NewAliCloudAuthMethod(conf *auth.AuthConfig) (auth.AuthMethod, error) {
@@ -28,6 +36,7 @@ func NewAliCloudAuthMethod(conf *auth.AuthConfig) (auth.AuthMethod, error) {
 	a := &alicloudMethod{
 		logger:     conf.Logger,
 		mountPath:  conf.MountPath,
+		creds:      make(chan aliCloudAuth.Credential),
 		credsFound: make(chan struct{}),
 		stopCh:     make(chan struct{}),
 	}
@@ -131,44 +140,48 @@ func NewAliCloudAuthMethod(conf *auth.AuthConfig) (auth.AuthMethod, error) {
 	}
 	a.credentialChain = providers.NewChainProvider(credentialChain)
 
-	go a.pollForNewCreds()
+	// Do an initial population of the creds.
+	lastCreds, err := a.credentialChain.Retrieve()
+	if err != nil {
+		return nil, err
+	}
+
+	go a.pollForNewCreds(lastCreds)
 
 	return a, nil
 }
 
 type alicloudMethod struct {
-	logger           hclog.Logger
-	mountPath        string
-	credCheckFreqSec int
+	logger    hclog.Logger
+	mountPath string
 
+	// These parameters are fed into building login data.
 	role            string
 	credentialChain providers.Provider
 	region          string
 
-	credLock  sync.Mutex
-	lastCreds aliCloudAuth.Credential
+	// These are used for polling for new creds and communicating new ones.
+	credCheckFreqSec int
+	creds            chan aliCloudAuth.Credential
+	credsFound       chan struct{}
 
-	credsFound chan struct{}
-	stopCh     chan struct{}
+	// The outer environment is closing.
+	stopCh chan struct{}
 }
 
 func (m *alicloudMethod) Authenticate(context.Context, *api.Client) (string, map[string]interface{}, error) {
 	m.logger.Trace("beginning authentication")
-
-	m.credLock.Lock()
-	if m.lastCreds == nil {
-		// This is our first time authenticating.
-		creds, err := m.credentialChain.Retrieve()
-		if err != nil {
-			return "", nil, err
-		}
-		m.lastCreds = creds
+	creds, ok := <-m.creds
+	if !ok {
+		// The enclosing environment is closing.
+		// It's not an error, just return empty, safe values.
+		m.logger.Trace("creds channel closed, halting authentication")
+		return "", make(map[string]interface{}), nil
 	}
-	data, err := tools.GenerateLoginData(m.role, m.lastCreds, m.region)
+	data, err := tools.GenerateLoginData(m.role, creds, m.region)
 	if err != nil {
 		return "", nil, err
 	}
-	m.credLock.Unlock()
 	return fmt.Sprintf("%s/login", m.mountPath), data, nil
 }
 
@@ -179,10 +192,17 @@ func (m *alicloudMethod) NewCreds() chan struct{} {
 func (m *alicloudMethod) CredSuccess() {}
 
 func (m *alicloudMethod) Shutdown() {
+	close(m.credsFound)
+	close(m.creds)
 	close(m.stopCh)
 }
 
-func (m *alicloudMethod) pollForNewCreds() {
+func (m *alicloudMethod) pollForNewCreds(lastCreds aliCloudAuth.Credential) {
+
+	// We put our first set of creds into the channel immediately so that
+	// when Authenticate is first called, it'll wait for them and then use them.
+	m.creds <- lastCreds
+
 	timer := time.NewTimer(time.Duration(m.credCheckFreqSec) * time.Second)
 	for {
 		select {
@@ -192,20 +212,18 @@ func (m *alicloudMethod) pollForNewCreds() {
 			return
 
 		case <-timer.C:
-			m.credLock.Lock()
 			currentCreds, err := m.credentialChain.Retrieve()
 			if err != nil {
-				m.logger.Warn("unable to retrieve current creds, retaining previous ones", err)
+				m.logger.Warn("unable to retrieve current creds, retaining last creds", err)
 				continue
 			}
-			if currentCreds == m.lastCreds {
+			if currentCreds == lastCreds {
 				continue
 			}
-			m.lastCreds = currentCreds
-			m.credLock.Unlock()
-
-			// Let the outer context know it should run the Authenticate method again.
+			m.creds <- currentCreds
 			m.credsFound <- struct{}{}
+
+			lastCreds = currentCreds
 		}
 	}
 }
