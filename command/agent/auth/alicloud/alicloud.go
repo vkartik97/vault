@@ -190,8 +190,10 @@ func (a *alicloudMethod) NewCreds() chan struct{} {
 func (a *alicloudMethod) CredSuccess() {}
 
 func (a *alicloudMethod) Shutdown() {
+	a.logger.Trace("shutdown called in alicloud") // TODO strip me
 	close(a.credsFound)
 	close(a.stopCh)
+	a.logger.Trace("shutdown call finished in alicloud") // TODO strip me
 }
 
 func (a *alicloudMethod) pollForCreds(credProvider providers.Provider, frequencySeconds int) {
@@ -199,6 +201,7 @@ func (a *alicloudMethod) pollForCreds(credProvider providers.Provider, frequency
 	for {
 		select {
 		case <-a.stopCh:
+			a.logger.Trace("shutdown triggered, stopping alicloud auth handler")
 			return
 		case <-timer.C:
 			if err := a.checkCreds(credProvider); err != nil {

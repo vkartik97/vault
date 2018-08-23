@@ -68,8 +68,10 @@ func (ah *AuthHandler) Run(ctx context.Context, am AuthMethod) {
 
 	ah.logger.Info("starting auth handler")
 	defer func() {
-		ah.logger.Info("auth handler stopped")
+		am.Shutdown()
 		close(ah.DoneCh)
+		close(ah.OutputCh)
+		ah.logger.Info("auth handler stopped")
 	}()
 
 	credCh := am.NewCreds()
@@ -82,9 +84,7 @@ func (ah *AuthHandler) Run(ctx context.Context, am AuthMethod) {
 	for {
 		select {
 		case <-ctx.Done():
-			am.Shutdown()
 			return
-
 		default:
 		}
 
