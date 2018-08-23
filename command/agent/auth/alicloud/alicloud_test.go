@@ -41,6 +41,7 @@ func TestNewAliCloudAuthMethod(t *testing.T) {
 	}
 
 	logger := hclog.Default()
+	logger.SetLevel(hclog.Trace)
 	authHandlerConfig := &auth.AuthHandlerConfig{
 		Logger: logger,
 		Client: apiClient,
