@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	aliCloudAuth "github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth"
@@ -36,7 +37,6 @@ func NewAliCloudAuthMethod(conf *auth.AuthConfig) (auth.AuthMethod, error) {
 	a := &alicloudMethod{
 		logger:     conf.Logger,
 		mountPath:  conf.MountPath,
-		creds:      make(chan aliCloudAuth.Credential),
 		credsFound: make(chan struct{}),
 		stopCh:     make(chan struct{}),
 	}
@@ -58,11 +58,10 @@ func NewAliCloudAuthMethod(conf *auth.AuthConfig) (auth.AuthMethod, error) {
 	}
 
 	// Check for an optional custom frequency at which we should poll for creds.
+	credCheckFreqSec := defaultCredCheckFreqSeconds
 	if checkFreqRaw, ok := conf.Config["cred_check_freq_seconds"]; ok {
-		if credFreq, ok := checkFreqRaw.(int); !ok {
-			a.credCheckFreqSec = defaultCredCheckFreqSeconds
-		} else {
-			a.credCheckFreqSec = credFreq
+		if credFreq, ok := checkFreqRaw.(int); ok {
+			credCheckFreqSec = credFreq
 		}
 	}
 
@@ -138,15 +137,17 @@ func NewAliCloudAuthMethod(conf *auth.AuthConfig) (auth.AuthMethod, error) {
 		providers.NewConfigurationCredentialProvider(credConfig),
 		providers.NewInstanceMetadataProvider(),
 	}
-	a.credentialChain = providers.NewChainProvider(credentialChain)
+	credProvider := providers.NewChainProvider(credentialChain)
 
-	// Do an initial population of the creds.
-	lastCreds, err := a.credentialChain.Retrieve()
+	// Do an initial population of the creds because we want to err right away if we can't
+	// even get a first set.
+	lastCreds, err := credProvider.Retrieve()
 	if err != nil {
 		return nil, err
 	}
+	a.lastCreds = lastCreds
 
-	go a.pollForNewCreds(lastCreds)
+	go a.pollForCreds(credProvider, credCheckFreqSec)
 
 	return a, nil
 }
@@ -156,74 +157,72 @@ type alicloudMethod struct {
 	mountPath string
 
 	// These parameters are fed into building login data.
-	role            string
-	credentialChain providers.Provider
-	region          string
+	role   string
+	region string
 
-	// These are used for polling for new creds and communicating new ones.
-	credCheckFreqSec int
-	creds            chan aliCloudAuth.Credential
-	credsFound       chan struct{}
+	// These are used to share the latest creds safely across goroutines.
+	credLock  sync.Mutex
+	lastCreds aliCloudAuth.Credential
 
-	// The outer environment is closing.
+	// Notifies the outer environment that it should call Authenticate again.
+	credsFound chan struct{}
+
+	// Detects that the outer environment is closing.
 	stopCh chan struct{}
 }
 
-func (m *alicloudMethod) Authenticate(context.Context, *api.Client) (string, map[string]interface{}, error) {
-	m.logger.Trace("beginning authentication")
-	creds, ok := <-m.creds
-	if !ok {
-		// The enclosing environment is closing.
-		// It's not an error, just return empty, safe values.
-		m.logger.Trace("creds channel closed, halting authentication")
-		return "", make(map[string]interface{}), nil
-	}
-	data, err := tools.GenerateLoginData(m.role, creds, m.region)
+func (a *alicloudMethod) Authenticate(context.Context, *api.Client) (string, map[string]interface{}, error) {
+	a.credLock.Lock()
+	defer a.credLock.Unlock()
+
+	a.logger.Trace("beginning authentication")
+	data, err := tools.GenerateLoginData(a.role, a.lastCreds, a.region)
 	if err != nil {
 		return "", nil, err
 	}
-	return fmt.Sprintf("%s/login", m.mountPath), data, nil
+	return fmt.Sprintf("%s/login", a.mountPath), data, nil
 }
 
-func (m *alicloudMethod) NewCreds() chan struct{} {
-	return m.credsFound
+func (a *alicloudMethod) NewCreds() chan struct{} {
+	return a.credsFound
 }
 
-func (m *alicloudMethod) CredSuccess() {}
+func (a *alicloudMethod) CredSuccess() {}
 
-func (m *alicloudMethod) Shutdown() {
-	close(m.credsFound)
-	close(m.creds)
-	close(m.stopCh)
+func (a *alicloudMethod) Shutdown() {
+	close(a.credsFound)
+	close(a.stopCh)
 }
 
-func (m *alicloudMethod) pollForNewCreds(lastCreds aliCloudAuth.Credential) {
-
-	// We put our first set of creds into the channel immediately so that
-	// when Authenticate is first called, it'll wait for them and then use them.
-	m.creds <- lastCreds
-
-	timer := time.NewTimer(time.Duration(m.credCheckFreqSec) * time.Second)
+func (a *alicloudMethod) pollForCreds(credProvider providers.Provider, frequencySeconds int) {
+	timer := time.NewTimer(time.Duration(frequencySeconds) * time.Second)
 	for {
 		select {
-
-		case <-m.stopCh:
-			// Shutdown has been called.
+		case <-a.stopCh:
 			return
-
 		case <-timer.C:
-			currentCreds, err := m.credentialChain.Retrieve()
-			if err != nil {
-				m.logger.Warn("unable to retrieve current creds, retaining last creds", err)
-				continue
+			if err := a.checkCreds(credProvider); err != nil {
+				a.logger.Warn("unable to retrieve current creds, retaining last creds", err)
 			}
-			if currentCreds == lastCreds {
-				continue
-			}
-			m.creds <- currentCreds
-			m.credsFound <- struct{}{}
-
-			lastCreds = currentCreds
 		}
 	}
+}
+
+func (a *alicloudMethod) checkCreds(credProvider providers.Provider) error {
+	a.credLock.Lock()
+	defer a.credLock.Unlock()
+
+	a.logger.Trace("checking for new credentials")
+	currentCreds, err := credProvider.Retrieve()
+	if err != nil {
+		return err
+	}
+	if currentCreds == a.lastCreds {
+		a.logger.Trace("credentials are unchanged")
+		return nil
+	}
+	a.lastCreds = currentCreds
+	a.logger.Trace("new credentials detected, triggering Authenticate")
+	a.credsFound <- struct{}{}
+	return nil
 }
