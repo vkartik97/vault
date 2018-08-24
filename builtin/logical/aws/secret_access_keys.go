@@ -15,11 +15,11 @@ import (
 	"github.com/hashicorp/vault/logical/framework"
 )
 
-const SecretAccessKeyType = "access_keys"
+const secretAccessKeyType = "access_keys"
 
 func secretAccessKeys(b *backend) *framework.Secret {
 	return &framework.Secret{
-		Type: SecretAccessKeyType,
+		Type: secretAccessKeyType,
 		Fields: map[string]*framework.FieldSchema{
 			"access_key": &framework.FieldSchema{
 				Type:        framework.TypeString,
@@ -86,7 +86,7 @@ func (b *backend) secretTokenCreate(ctx context.Context, s logical.Storage,
 			"Error generating STS keys: %s", err)), nil
 	}
 
-	resp := b.Secret(SecretAccessKeyType).Response(map[string]interface{}{
+	resp := b.Secret(secretAccessKeyType).Response(map[string]interface{}{
 		"access_key":     *tokenResp.Credentials.AccessKeyId,
 		"secret_key":     *tokenResp.Credentials.SecretAccessKey,
 		"security_token": *tokenResp.Credentials.SessionToken,
@@ -134,7 +134,7 @@ func (b *backend) assumeRole(ctx context.Context, s logical.Storage,
 			"Error assuming role: %s", err)), nil
 	}
 
-	resp := b.Secret(SecretAccessKeyType).Response(map[string]interface{}{
+	resp := b.Secret(secretAccessKeyType).Response(map[string]interface{}{
 		"access_key":     *tokenResp.Credentials.AccessKeyId,
 		"secret_key":     *tokenResp.Credentials.SecretAccessKey,
 		"security_token": *tokenResp.Credentials.SessionToken,
@@ -172,7 +172,7 @@ func (b *backend) secretAccessKeysCreate(
 	// the user is created because if switch the order then the WAL put
 	// can fail, which would put us in an awkward position: we have a user
 	// we need to rollback but can't put the WAL entry to do the rollback.
-	walId, err := framework.PutWAL(ctx, s, "user", &walUser{
+	walID, err := framework.PutWAL(ctx, s, "user", &walUser{
 		UserName: username,
 	})
 	if err != nil {
@@ -184,8 +184,9 @@ func (b *backend) secretAccessKeysCreate(
 		UserName: aws.String(username),
 	})
 	if err != nil {
-		return logical.ErrorResponse(fmt.Sprintf(
-			"Error creating IAM user: %s", err)), nil
+		re := logical.ErrorResponse(fmt.Sprintf(
+			"Error attaching user policy: %s", err))
+		return re, nil
 	}
 
 	for _, arn := range role.PolicyArns {
@@ -225,12 +226,12 @@ func (b *backend) secretAccessKeysCreate(
 	// Remove the WAL entry, we succeeded! If we fail, we don't return
 	// the secret because it'll get rolled back anyways, so we have to return
 	// an error here.
-	if err := framework.DeleteWAL(ctx, s, walId); err != nil {
+	if err := framework.DeleteWAL(ctx, s, walID); err != nil {
 		return nil, errwrap.Wrapf("failed to commit WAL entry: {{err}}", err)
 	}
 
 	// Return the info!
-	resp := b.Secret(SecretAccessKeyType).Response(map[string]interface{}{
+	resp := b.Secret(secretAccessKeyType).Response(map[string]interface{}{
 		"access_key":     *keyResp.AccessKey.AccessKeyId,
 		"secret_key":     *keyResp.AccessKey.SecretAccessKey,
 		"security_token": nil,
