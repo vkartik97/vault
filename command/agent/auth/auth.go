@@ -85,6 +85,7 @@ func (ah *AuthHandler) Run(ctx context.Context, am AuthMethod) {
 		select {
 		case <-ctx.Done():
 			return
+
 		default:
 		}
 

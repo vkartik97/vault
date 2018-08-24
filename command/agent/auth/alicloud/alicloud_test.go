@@ -12,18 +12,6 @@ import (
 	"github.com/hashicorp/vault/command/agent/auth"
 )
 
-/*
-	TODO
-
-	2018-08-23T14:37:25.108-0700 [INFO ] authenticating
-	2018-08-23T14:37:25.109-0700 [INFO ] authenticating
-	2018-08-23T14:37:25.110-0700 [INFO ] authenticating
-
-	In the absence of an error, this test is currently triggering authentication VERY quickly... is this intended?
-	It never hits the backoff because there's never a problem. It could be that my test doesn't represent a real
-	life configuration though.
-*/
-
 func TestNewAliCloudAuthMethod(t *testing.T) {
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -71,10 +59,15 @@ func TestNewAliCloudAuthMethod(t *testing.T) {
 		authHandler.Run(ctx, authMethod)
 		cancelFunc()
 	}()
+	receivedClientToken := false
 	for clientToken := range authHandler.OutputCh {
 		if clientToken != "client-token" {
 			t.Fatalf("expected client-token but received %s", clientToken)
 		}
+		receivedClientToken = true
+	}
+	if !receivedClientToken {
+		t.Fatal("should have received at least one client token")
 	}
 }
 

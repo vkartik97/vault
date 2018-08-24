@@ -190,10 +190,8 @@ func (a *alicloudMethod) NewCreds() chan struct{} {
 func (a *alicloudMethod) CredSuccess() {}
 
 func (a *alicloudMethod) Shutdown() {
-	a.logger.Trace("shutdown called in alicloud") // TODO strip me
 	close(a.credsFound)
 	close(a.stopCh)
-	a.logger.Trace("shutdown call finished in alicloud") // TODO strip me
 }
 
 func (a *alicloudMethod) pollForCreds(credProvider providers.Provider, frequencySeconds int) {
