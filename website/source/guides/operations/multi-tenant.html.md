@@ -1,6 +1,7 @@
 ---
 layout: "guides"
 page_title: "Secure Multi-Tenancy with Namepaces - Guides"
+sidebar_title: "Multi-Tenant: Namespaces"
 sidebar_current: "guides-operations-multi-tenant"
 description: |-
   This guide provides guidance in creating a multi-tenant environment.
@@ -14,7 +15,7 @@ Everything in Vault is path-based, and often uses the terms `path` and
 `namespace` interchangeably. The application namespace pattern is a useful
 construct for providing Vault as a service to internal customers, giving them
 the ability to implement secure multi-tenancy within Vault in order to provide
-isolation and ensure teams can self-manage their own environments. 
+isolation and ensure teams can self-manage their own environments.
 
 
 ## Reference Material
