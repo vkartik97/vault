@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/vault/helper/strutil"
@@ -130,6 +131,11 @@ func pathUserRollback(ctx context.Context, req *logical.Request, _kind string, d
 		MaxItems: aws.Int64(1000),
 	})
 	if err != nil {
+		// If the user isn't found, let's just move on. This could happen if we fail
+		// to create the new user in the first place
+		if awserr, ok := err.(awserr.Error); ok && awserr.Code() == "NoSuchEntity" {
+			return nil
+		}
 		return err
 	}
 	groups := groupsResp.Groups

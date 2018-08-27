@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	awsRequest "github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/hashicorp/errwrap"
@@ -184,9 +185,16 @@ func (b *backend) secretAccessKeysCreate(
 		UserName: aws.String(username),
 	})
 	if err != nil {
-		re := logical.ErrorResponse(fmt.Sprintf(
-			"Error attaching user policy: %s", err))
-		return re, nil
+		var throttleErr error
+		// IsErrorThrottle will check if the error returned is one that matches
+		// known request limiting errors:
+		// https://github.com/aws/aws-sdk-go/blob/488d634b5a699b9118ac2befb5135922b4a77210/aws/request/retryer.go#L35
+		if awsRequest.IsErrorThrottle(err) {
+			throttleErr = logical.ErrUpstreamRateLimited
+		}
+
+		return logical.ErrorResponse(fmt.Sprintf(
+			"Error creating IAM user: %s", err)), throttleErr
 	}
 
 	for _, arn := range role.PolicyArns {
