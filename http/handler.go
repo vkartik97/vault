@@ -442,16 +442,6 @@ func request(core *vault.Core, w http.ResponseWriter, rawReq *http.Request, r *l
 		return resp, false
 	}
 
-	if errwrap.Contains(err, logical.ErrUpstreamRateLimited.Error()) {
-		// assume the resp.Data map contains the original error in the "error" key.
-		// If so, we'll add that to the response output and return a 502 "Bad
-		// Gateway" status
-		if err := resp.Error(); err != nil {
-			respondError(w, http.StatusBadGateway, err)
-			return resp, false
-		}
-	}
-
 	if respondErrorCommon(w, r, resp, err) {
 		return resp, false
 	}
