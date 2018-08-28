@@ -1,6 +1,7 @@
 ---
 layout: "docs"
 page_title: "JWT/OIDC - Auth Methods"
+sidebar_title: "JWT/OIDC"
 sidebar_current: "docs-auth-jwt"
 description: |-
   The JWT/OIDC auth method allows authentication using JWTs and OIDC.
