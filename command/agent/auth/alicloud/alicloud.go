@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -196,6 +197,7 @@ func (a *alicloudMethod) Shutdown() {
 
 func (a *alicloudMethod) pollForCreds(credProvider providers.Provider, frequencySeconds int) {
 	timer := time.NewTimer(time.Duration(frequencySeconds) * time.Second)
+	defer timer.Stop()
 	for {
 		select {
 		case <-a.stopCh:
@@ -218,7 +220,9 @@ func (a *alicloudMethod) checkCreds(credProvider providers.Provider) error {
 	if err != nil {
 		return err
 	}
-	if currentCreds == a.lastCreds {
+	// These will always have different pointers regardless of whether their
+	// values are identical, hence the use of DeepEqual.
+	if reflect.DeepEqual(currentCreds, a.lastCreds) {
 		a.logger.Trace("credentials are unchanged")
 		return nil
 	}
